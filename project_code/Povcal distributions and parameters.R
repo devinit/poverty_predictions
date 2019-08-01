@@ -173,20 +173,21 @@ if(!("all_dist.csv" %in% list.files("project_data") & "all_parameters.csv" %in% 
 }
 
 #Manual addition of Afghanistan and Somalia
-afg.som.param <- data.table(A=c(0.935463769,0.5760727,0.88737242,0.666110634)
-                            ,B=c(-1.476794803,0.856948964,-1.254176897,0.95205282)
-                            ,C=c(0.083512829,0.49178234,0.196100839,0.562072863)
-                            ,svy=c("AFG_3","AFG_3","SOM_3","SOM_3"),
-                            year=c(2016.5,2016.5,2017,2017),
-                            mean=c(2.788346962/12*365.2424,2.788346962/12*365.2424,1.69211737786/12*365.2424,1.69211737786/12*365.2424),
-                            ppp=c(22.8388105,22.8388105,0.674879848994,0.674879848994),
+afg.som.lby.param <- data.table(A=c(0.935463769,0.5760727,0.88737242,0.666110634,1.002559972,0.613658334)
+                            ,B=c(-1.476794803,0.856948964,-1.254176897,0.95205282,-1.341360921,0.934277217)
+                            ,C=c(0.083512829,0.49178234,0.196100839,0.562072863,0.241518659,0.607012527)
+                            ,svy=c("AFG_3","AFG_3","SOM_3","SOM_3","LBY_3","LBY_3"),
+                            year=c(2016.5,2016.5,2017,2017,2008,2008),
+                            mean=c(2.788346962/12*365.2424,2.788346962/12*365.2424,1.69211737786/12*365.2424,1.69211737786/12*365.2424,4.9507954/12*365.2424,4.9507954/12*365.2424),
+                            ppp=c(22.8388105,22.8388105,0.674879848994,0.674879848994,0.6577641,0.6577641),
                             type=rep(c("GQ","Beta"),2)
 )
 
-all_parameters <- rbind(all_parameters, afg.som.param)
+all_parameters <- rbind(all_parameters, afg.som.lby.param)
 all_parameters <- merge(all_parameters, unique(ext[,c(4,34)]), by.x="svy", by.y="C0",all.x=T)
 all_parameters[which(svy=="AFG_3")]$CountryName <- "Afghanistan"
 all_parameters[which(svy=="SOM_3")]$CountryName <- "Somalia"
+all_parameters[which(svy=="LBY_3")]$CountryName <- "Libya"
 
 #Only most recent surveys
 recent_years <- all_parameters[all_parameters[, .I[which.max(year)], by=svy]$V1][,c(1,5,9)]
@@ -338,7 +339,7 @@ wup.all$CountryName[which(wup.all$CountryName=="Yemen")]="Yemen, Republic of"
 wup.all$CountryName[which(wup.all$CountryName=="State of Palestine")]="West Bank and Gaza"
 }
 
-afg.som <- data.table(CountryCode=c("AFG","SOM"), CountryName=c("Afghanistan","Somalia"))
+afg.som <- data.table(CountryCode=c("AFG","SOM","LBY"), CountryName=c("Afghanistan","Somalia","Libya"))
 
 wup.all <- merge(wup.all, rbind(unique(ext[,c(3,4)]),afg.som), by="CountryName", all.y=T)
 wup.all$svy <- paste0(wup.all$CountryCode,"_",wup.all$type)
@@ -353,3 +354,35 @@ headcountproj$poorBeta2030high <- headcountproj$`2030`*headcountproj$Beta2030hig
 headcountproj$poorGQ2030high <- headcountproj$`2030`*headcountproj$GQ2030high
 headcountproj$poorBeta2030low <- headcountproj$`2030`*headcountproj$Beta2030low
 headcountproj$poorGQ2030low <- headcountproj$`2030`*headcountproj$GQ2030low
+
+crisis.countries <- c("Somalia",
+"Central African Republic",
+"West Bank and Gaza",
+"Chad",
+"Congo, Democratic Republic of",
+"Yemen, Republic of",
+"South Sudan",
+"Afghanistan",
+"Mali",
+"Myanmar",
+"Mauritania",
+"Syrian Arab Republic",
+"Iraq",
+"Cameroon",
+"Nigeria",
+"Senegal",
+"Libya",
+"Niger",
+"Ukraine",
+"Sudan",
+"Haiti",
+"Burundi")
+
+headcountproj$crisis <- 0
+headcountproj[which(CountryName %in% crisis.countries)]$crisis <- 1
+
+headcountproj.melt <- melt(headcountproj, id.vars=c("svy","CountryName","CountryCode","type","crisis"))
+headcountproj.melt <- headcountproj.melt[variable %in% c("poorBeta2018","poorGQ2018","poorBeta2030","poorGQ2030","poorBeta2030high","poorGQ2030high","poorBeta2030low","poorGQ2030low")]
+
+crisis.poverty <- headcountproj.melt[!(svy %in% c("BOL_2","ETH_1","COL_2","FSM_2","HND_2","URY_2")), .(total.poor=sum(value*1000, na.rm=T)), by=.(variable,crisis)]
+fwrite(crisis.poverty, "output/crisis_forcast.csv")
