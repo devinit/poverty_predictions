@@ -385,4 +385,4 @@ headcountproj.melt <- melt(headcountproj, id.vars=c("svy","CountryName","Country
 headcountproj.melt <- headcountproj.melt[variable %in% c("poorBeta2018","poorGQ2018","poorBeta2030","poorGQ2030","poorBeta2030high","poorGQ2030high","poorBeta2030low","poorGQ2030low")]
 
 crisis.poverty <- headcountproj.melt[!(svy %in% c("BOL_2","ETH_1","COL_2","FSM_2","HND_2","URY_2")), .(total.poor=sum(value*1000, na.rm=T)), by=.(variable,crisis)]
-fwrite(crisis.poverty, "output/crisis_forcast.csv")
+fwrite(crisis.poverty, "output/crisis_forecast.csv")
