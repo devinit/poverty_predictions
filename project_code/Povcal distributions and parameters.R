@@ -1,4 +1,4 @@
-required.packages <- c("reshape2","ggplot2","data.table","WDI","XML")
+required.packages <- c("reshape2","ggplot2","data.table","WDI","XML","readxl")
 lapply(required.packages, require, character.only=T)
 
 setwd("G:/My Drive/Work/GitHub/poverty_predictions")
@@ -66,7 +66,6 @@ povcal_dist <- function(C0="AGO_3",Y0=2015){
   }
   dist <- list()
   dist <- df
-  #dist[["mean"]] <- as.numeric(mean)
   return(dist)
 }
 
@@ -180,7 +179,7 @@ afg.som.lby.param <- data.table(A=c(0.935463769,0.5760727,0.88737242,0.666110634
                             year=c(2016.5,2016.5,2017,2017,2008,2008),
                             mean=c(2.788346962/12*365.2424,2.788346962/12*365.2424,1.69211737786/12*365.2424,1.69211737786/12*365.2424,4.9507954/12*365.2424,4.9507954/12*365.2424),
                             ppp=c(22.8388105,22.8388105,0.674879848994,0.674879848994,0.6577641,0.6577641),
-                            type=rep(c("GQ","Beta"),2)
+                            type=rep(c("GQ","Beta"),3)
 )
 
 all_parameters <- rbind(all_parameters, afg.som.lby.param)
@@ -259,7 +258,8 @@ for(i in 1:nrow(parameters_GQ)){
                                ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2030minus1,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))}))
 }
 
-GQhc <- rbindlist(data.list)
+GQhc <- rbindlist(data.list, fill=T)
+GQhc <- GQhc[,c(1:8)]
 names(GQhc) <- c("2018P1","2018P2","2030P1","2030P2","2030+1P1","2030+1P2","2030-1P1","2030-1P2")
 parameters_GQ <- cbind(parameters_GQ, GQhc)
 
@@ -268,8 +268,7 @@ for(i in 1:nrow(parameters_Beta)){
   data.list[[i]] <- data.table(tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2018,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
                                ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
                                ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030plus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
-                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030minus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
-  )
+                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030minus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)}))
 }
 
 Betahc <- rbindlist(data.list)
@@ -339,9 +338,9 @@ wup.all$CountryName[which(wup.all$CountryName=="Yemen")]="Yemen, Republic of"
 wup.all$CountryName[which(wup.all$CountryName=="State of Palestine")]="West Bank and Gaza"
 }
 
-afg.som <- data.table(CountryCode=c("AFG","SOM","LBY"), CountryName=c("Afghanistan","Somalia","Libya"))
+afg.som.lby <- data.table(CountryCode=c("AFG","SOM","LBY"), CountryName=c("Afghanistan","Somalia","Libya"))
 
-wup.all <- merge(wup.all, rbind(unique(ext[,c(3,4)]),afg.som), by="CountryName", all.y=T)
+wup.all <- merge(wup.all, rbind(unique(ext[,c(3,4)]),afg.som.lby), by="CountryName", all.y=T)
 wup.all$svy <- paste0(wup.all$CountryCode,"_",wup.all$type)
 
 headcountproj <- merge(headcountproj, wup.all, by=c("svy","CountryName"), all.x=T)
