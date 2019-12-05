@@ -3,6 +3,17 @@ lapply(required.packages, require, character.only=T)
 
 setwd("G:/My Drive/Work/GitHub/poverty_predictions")
 
+ginicalc <- function(P,L){
+  dP <- diff(P)
+  dL <- diff(L)
+  fL <- head(L,-1)
+  dPL <- dP*dL
+  dPfL <- dP*fL
+  area <- sum(dPL) + sum(dPfL)
+  gini <- 1-2*area
+  return(gini)
+}
+
 all_parameters <- fread("project_data/all_parameters.csv")
 afg.som.lby.param <- data.table(A=c(0.935463769,0.5760727,0.88737242,0.666110634,1.002559972,0.613658334)
                                 ,B=c(-1.476794803,0.856948964,-1.254176897,0.95205282,-1.341360921,0.934277217)
@@ -34,7 +45,7 @@ for(i in 1:nrow(parameters_Beta)){
   mean <- svy$mean*12/365.2424
   pop <- svy$ReqYearPopulation*1000
   df <- data.table(P=seq(1/pop,1,1/pop))
-  df$p <- 1/pop
+  #df$p <- 1/pop
   df$z <- mean*(1-(svy$A*(df$P^svy$B)*((1-(df$P))^svy$C)*((svy$B/df$P)-(svy$C/(1-df$P)))))
   beta.list[[i]] <- df
   setTxtProgressBar(pb,i)
@@ -54,7 +65,7 @@ for(i in 1:nrow(parameters_GQ)){
   m <- svy$B^2-4*svy$A
   n <- 2*svy$B*e-4*svy$C
   df <- data.table(P=seq(1/pop,1,1/pop))
-  df$p <- 1/pop
+  #df$p <- 1/pop
   df$z <- mean*(-(svy$B/2)-((2*m*df$P+n)*((m*(df$P^2)+n*df$P+e^2))^(-0.5))/4)
   GQ.list[[i]] <- df
   setTxtProgressBar(pb,i)
@@ -63,3 +74,13 @@ GQ <- rbindlist(GQ.list)
 rm(GQ.list)
 GQ <- GQ[order(z)]
 GQ$P <- seq(1/nrow(GQ),1,1/nrow(GQ))
+
+beta[z<0]$z <- 0
+GQ[z<0]$z <- 0
+beta[is.na(z)]$z <- max(beta$z, na.rm=T)
+
+beta$Z <- cumsum(beta$z)
+beta$L <- beta$Z/max(beta$Z)
+
+GQ$Z <- cumsum(GQ$z)
+GQ$L <- GQ$Z/max(GQ$Z)
