@@ -113,10 +113,10 @@ Betasolve <- function(a,b,c,PL,mu,init){
 #Parameterise Povcal dists
 if(!("all_dist.csv" %in% list.files("project_data") & "all_parameters.csv" %in% list.files("project_data"))){
   ext <- povcal_svy()
-  fwrite(ext, "project_data/povcalout.csv")
   ext$svy_code <- remap_cov(ext$CoverageType)
   ext <- subset(ext,!is.na(svy_code))
   ext$C0 <- paste(ext$CountryCode,ext$svy_code,sep="_")
+  fwrite(ext, "project_data/povcalout.csv")
   data.list <- list()
   data.index <- 1
   errs <- c()
@@ -197,13 +197,19 @@ parameters_GQ <- all_parameters[all_parameters[, .I[which.max(year)], by=svy]$V1
 parameters_Beta <- all_parameters[all_parameters[, .I[which.max(year)], by=svy]$V1+1]
 
 #GDP per capita growth
-WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2019/01/weodata/WEOApr2019all.xls", na.strings="n/a")
-WEO <- WEOraw[`WEO Subject Code`=="NGDP_RPCH"]
+WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2019/02/weodata/WEOOct2019all.xls", na.strings="n/a")
+WEO <- WEOraw[`WEO Subject Code` %in% c("NGDPRPPPPCPCH", "NGDPRPPPPC")]
+
+year.cols <- as.character(seq(1980,2024))
+year.sd.cols <- tail(year.cols, -1)
+WEO[, (year.cols) := lapply(.SD, function(x) gsub(",", "", x)), .SDcols=(year.cols)]
+WEO[`WEO Subject Code` == "NGDPRPPPPC", (year.sd.cols) := as.data.table(t(apply(.SD, 1, function(x) as.character(diff(as.numeric(x))/as.numeric(x))))), .SDcols=(year.cols), by=Country]
+
 WEO[WEO=="--"] <- 0
 
 {WEO$Country[which(WEO$Country=="Democratic Republic of the Congo")]="Congo, Democratic Republic of"
   WEO$Country[which(WEO$Country=="Republic of Congo")]="Congo, Republic of"
-  WEO$Country[which(WEO$Country=="Côte d'Ivoire")]="Cote d'Ivoire"
+  WEO$Country[which(WEO$Country=="C?te d'Ivoire")]="Cote d'Ivoire"
   WEO$Country[which(WEO$Country=="Egypt")]="Egypt, Arab Republic of"
   WEO$Country[which(WEO$Country=="The Gambia")]="Gambia, The"
   WEO$Country[which(WEO$Country=="Islamic Republic of Iran")]="Iran, Islamic Republic of"
@@ -214,14 +220,14 @@ WEO[WEO=="--"] <- 0
   WEO$Country[which(WEO$Country=="Lao P.D.R.")]="Lao People's Democratic Republic"
   WEO$Country[which(WEO$Country=="FYR Macedonia")]="Macedonia, former Yugoslav Republic of"
   WEO$Country[which(WEO$Country=="Micronesia")]="Micronesia, Federated States of"
-  WEO$Country[which(WEO$Country=="São Tomé and Príncipe")]="Sao Tome and Principe"
+  WEO$Country[which(WEO$Country=="S?o Tom? and Pr?ncipe")]="Sao Tome and Principe"
   WEO$Country[which(WEO$Country=="Korea")]="Korea, Republic of"}
 
 names(WEO)[which(names(WEO)=="Country")]<- "CountryName"
 WEO <- merge(WEO, recent_years, by="CountryName", all=T)
 WEO[is.na(WEO$year)]$year <- 2018
 
-#Calculate average growth for years between survey and 2018, and 2018-2024
+#Calculate average growth for years between survey and 2018, and 2018-2021
 WEO$growthto18 <- as.numeric(NA)
 WEO$growthforecast <- as.numeric(NA)
 for(i in 1:nrow(WEO)){
@@ -231,7 +237,7 @@ for(i in 1:nrow(WEO)){
     cols <- as.character(seq(WEO[i]$year,2018))
     WEO[i]$growthto18 <- mean(as.numeric(WEO[i,..cols]), na.rm=T)
   }
-  cols <- as.character(seq(2018,2024))
+  cols <- as.character(seq(2018,2021))
   WEO[i]$growthforecast <- mean(as.numeric(WEO[i,..cols]), na.rm=T)
 }
 
@@ -242,9 +248,9 @@ forecasts$adjgrowthforecast <- forecasts$growthforecast*0.87
 forecasts[which(CountryName=="China")]$adjgrowthto18 <- forecasts[which(CountryName=="China")]$growthto18*0.72
 forecasts[which(CountryName=="India")]$adjgrowthto18 <- forecasts[which(CountryName=="India")]$growthto18*0.51
 forecasts$PL2018 <- 1.9/(1+forecasts$adjgrowthto18/100)^(2018-forecasts$year)
-forecasts$PL2030 <- forecasts$PL2018/(1+forecasts$adjgrowthforecast/100)^12
-forecasts$PL2030plus1 <- forecasts$PL2018/(1+(forecasts$adjgrowthforecast+1)/100)^12
-forecasts$PL2030minus1 <- forecasts$PL2018/(1+(forecasts$adjgrowthforecast-1)/100)^12
+forecasts$PL2020 <- forecasts$PL2018/(1+forecasts$adjgrowthforecast/100)^2
+forecasts$PL2020plus1 <- forecasts$PL2018/(1+(forecasts$adjgrowthforecast+1)/100)^2
+forecasts$PL2020minus1 <- forecasts$PL2018/(1+(forecasts$adjgrowthforecast-1)/100)^2
 
 parameters_GQ <- merge(parameters_GQ, forecasts, by=c("svy","CountryName"))
 parameters_Beta <- merge(parameters_Beta, forecasts, by=c("svy","CountryName"))
@@ -253,48 +259,48 @@ parameters_Beta <- merge(parameters_Beta, forecasts, by=c("svy","CountryName"))
 data.list <- list()
 for(i in 1:nrow(parameters_GQ)){
   data.list[[i]] <- data.table(tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2018,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))})
-                               ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2030,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))})
-                               ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2030plus1,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))})
-                               ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2030minus1,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))}))
+                               ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2020,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))})
+                               ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2020plus1,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))})
+                               ,tryCatch({GQsolve(parameters_GQ[i]$A,parameters_GQ[i]$B,parameters_GQ[i]$C,parameters_GQ[i]$PL2020minus1,parameters_GQ[i]$mean*12/365.2424)},error=function(e){return(data.table(NaN,NaN))}))
 }
 
 GQhc <- rbindlist(data.list, fill=T)
 GQhc <- GQhc[,c(1:8)]
-names(GQhc) <- c("2018P1","2018P2","2030P1","2030P2","2030+1P1","2030+1P2","2030-1P1","2030-1P2")
+names(GQhc) <- c("2018P1","2018P2","2020P1","2020P2","2020+1P1","2020+1P2","2020-1P1","2020-1P2")
 parameters_GQ <- cbind(parameters_GQ, GQhc)
 
 data.list <- list()
 for(i in 1:nrow(parameters_Beta)){
   data.list[[i]] <- data.table(tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2018,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
-                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
-                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030plus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
-                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2030minus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)}))
+                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2020,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
+                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2020plus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)})
+                               ,tryCatch({Betasolve((parameters_Beta[i]$A),parameters_Beta[i]$B,parameters_Beta[i]$C,parameters_Beta[i]$PL2020minus1,parameters_Beta[i]$mean*12/365.2424,0.1)},error=function(e){return(NaN)}))
 }
 
 Betahc <- rbindlist(data.list)
-names(Betahc) <- c("Beta2018","Beta2030","Beta2030high","Beta2030low")
+names(Betahc) <- c("Beta2018","Beta2020","Beta2020high","Beta2020low")
 parameters_Beta <- cbind(parameters_Beta,Betahc)
 
 #Output raw solutions; check GQ results against Beta and select nearest root
 hc <- merge(parameters_GQ[,c(1:2,19:26)],parameters_Beta[,c(1:2,19:22)], by=c("svy","CountryName"))
 hc[is.na(hc)] <- 0
 hc$GQ2018 <- hc$`2018P1`
-hc$GQ2030 <- hc$`2030P1`
-hc$GQ2030high <- hc$`2030+1P1`
-hc$GQ2030low <- hc$`2030-1P1`
+hc$GQ2020 <- hc$`2020P1`
+hc$GQ2020high <- hc$`2020+1P1`
+hc$GQ2020low <- hc$`2020-1P1`
 
 for(i in 1:nrow(hc)){
   if(abs(hc[i]$`2018P1`-hc[i]$Beta2018) > abs(hc[i]$`2018P2`-hc[i]$Beta2018)){
     hc[i]$GQ2018 <- hc[i]$`2018P2`
   }
-  if(abs(hc[i]$`2030P1`-hc[i]$Beta2030) > abs(hc[i]$`2030P2`-hc[i]$Beta2030)){
-    hc[i]$GQ2030 <- hc[i]$`2030P2`
+  if(abs(hc[i]$`2020P1`-hc[i]$Beta2020) > abs(hc[i]$`2020P2`-hc[i]$Beta2020)){
+    hc[i]$GQ2020 <- hc[i]$`2020P2`
   }
-  if(abs(hc[i]$`2030+1P1`-hc[i]$Beta2030high) > abs(hc[i]$`2030+1P2`-hc[i]$Beta2030high)){
-    hc[i]$GQ2030high <- hc[i]$`2030+1P2`
+  if(abs(hc[i]$`2020+1P1`-hc[i]$Beta2020high) > abs(hc[i]$`2020+1P2`-hc[i]$Beta2020high)){
+    hc[i]$GQ2020high <- hc[i]$`2020+1P2`
   }
-  if(abs(hc[i]$`2030-1P1`-hc[i]$Beta2030low) > abs(hc[i]$`2030-1P2`-hc[i]$Beta2030low)){
-    hc[i]$GQ2030low <- hc[i]$`2030-1P2`
+  if(abs(hc[i]$`2020-1P1`-hc[i]$Beta2020low) > abs(hc[i]$`2020-1P2`-hc[i]$Beta2020low)){
+    hc[i]$GQ2020low <- hc[i]$`2020-1P2`
   }
 }
 
@@ -307,9 +313,9 @@ if(!("WUP_urban.xls" %in% list.files("project_data") & "WUP_rural.xls" %in% list
 
 wup.urb <- read_xls("project_data/WUP_urban.xls", skip=16)
 wup.rur <- read_xls("project_data/WUP_rural.xls", skip=16)
-wup.urb <- data.table(type="2",wup.urb[,c(2,73,85)])
-wup.rur <- data.table(type="1",wup.rur[,c(2,73,85)])
-wup.tot <- data.table(type="3",wup.urb[,c(2)],wup.urb[,c(3,4)]+wup.rur[,c(3,4)])
+wup.urb <- data.table(type="2",wup.urb[,c("Region, subregion, country or area", "2018", "2020")])
+wup.rur <- data.table(type="1",wup.rur[,c("Region, subregion, country or area", "2018", "2020")])
+wup.tot <- data.table(type="3",wup.urb[,c(c("Region, subregion, country or area"))],wup.urb[,c(3,4)]+wup.rur[,c(3,4)])
 wup.all <- rbind(wup.tot,wup.urb,wup.rur)
 names(wup.all)[2] <- "CountryName"
 
@@ -317,7 +323,7 @@ names(wup.all)[2] <- "CountryName"
 wup.all$CountryName[which(wup.all$CountryName=="Bolivia (Plurinational State of)")]="Bolivia"
 wup.all$CountryName[which(wup.all$CountryName=="Democratic Republic of the Congo")]="Congo, Democratic Republic of"
 wup.all$CountryName[which(wup.all$CountryName=="Congo")]="Congo, Republic of"
-wup.all$CountryName[which(wup.all$CountryName=="Côte d'Ivoire")]="Cote d'Ivoire"
+wup.all$CountryName[which(wup.all$CountryName=="CÃ´te d'Ivoire")]="Cote d'Ivoire"
 wup.all$CountryName[which(wup.all$CountryName=="Czechia")]="Czech Republic"
 wup.all$CountryName[which(wup.all$CountryName=="Egypt")]="Egypt, Arab Republic of"
 wup.all$CountryName[which(wup.all$CountryName=="Gambia")]="Gambia, The"
@@ -336,6 +342,7 @@ wup.all$CountryName[which(wup.all$CountryName=="Venezuela (Bolivarian Republic o
 wup.all$CountryName[which(wup.all$CountryName=="Viet Nam")]="Vietnam"
 wup.all$CountryName[which(wup.all$CountryName=="Yemen")]="Yemen, Republic of"
 wup.all$CountryName[which(wup.all$CountryName=="State of Palestine")]="West Bank and Gaza"
+wup.all$CountryName[which(wup.all$CountryName=="China, Taiwan Province of China")]="Taiwan, China"
 }
 
 afg.som.lby <- data.table(CountryCode=c("AFG","SOM","LBY"), CountryName=c("Afghanistan","Somalia","Libya"))
@@ -347,12 +354,12 @@ headcountproj <- merge(headcountproj, wup.all, by=c("svy","CountryName"), all.x=
 
 headcountproj$poorBeta2018 <- headcountproj$`2018`*headcountproj$Beta2018
 headcountproj$poorGQ2018 <- headcountproj$`2018`*headcountproj$GQ2018
-headcountproj$poorBeta2030 <- headcountproj$`2030`*headcountproj$Beta2030
-headcountproj$poorGQ2030 <- headcountproj$`2030`*headcountproj$GQ2030
-headcountproj$poorBeta2030high <- headcountproj$`2030`*headcountproj$Beta2030high
-headcountproj$poorGQ2030high <- headcountproj$`2030`*headcountproj$GQ2030high
-headcountproj$poorBeta2030low <- headcountproj$`2030`*headcountproj$Beta2030low
-headcountproj$poorGQ2030low <- headcountproj$`2030`*headcountproj$GQ2030low
+headcountproj$poorBeta2020 <- headcountproj$`2020`*headcountproj$Beta2020
+headcountproj$poorGQ2020 <- headcountproj$`2020`*headcountproj$GQ2020
+headcountproj$poorBeta2020high <- headcountproj$`2020`*headcountproj$Beta2020high
+headcountproj$poorGQ2020high <- headcountproj$`2020`*headcountproj$GQ2020high
+headcountproj$poorBeta2020low <- headcountproj$`2020`*headcountproj$Beta2020low
+headcountproj$poorGQ2020low <- headcountproj$`2020`*headcountproj$GQ2020low
 
 crisis.countries <- c("Somalia",
 "Central African Republic",
@@ -381,7 +388,7 @@ headcountproj$crisis <- 0
 headcountproj[which(CountryName %in% crisis.countries)]$crisis <- 1
 
 headcountproj.melt <- melt(headcountproj, id.vars=c("svy","CountryName","CountryCode","type","crisis"))
-headcountproj.melt <- headcountproj.melt[variable %in% c("poorBeta2018","poorGQ2018","poorBeta2030","poorGQ2030","poorBeta2030high","poorGQ2030high","poorBeta2030low","poorGQ2030low")]
+headcountproj.melt <- headcountproj.melt[variable %in% c("poorBeta2018","poorGQ2018","poorBeta2020","poorGQ2020","poorBeta2020high","poorGQ2020high","poorBeta2020low","poorGQ2020low")]
 
 crisis.poverty <- headcountproj.melt[!(svy %in% c("BOL_2","ETH_1","COL_2","FSM_2","HND_2","URY_2")), .(total.poor=sum(value*1000, na.rm=T)), by=.(variable,crisis)]
 fwrite(crisis.poverty, "output/crisis_forecast.csv")
