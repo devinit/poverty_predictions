@@ -3,7 +3,7 @@ lapply(required.packages, require, character.only=T)
 
 setwd("G:/My Drive/Work/GitHub/poverty_predictions/")
 
-p20thresholds <- fread("output/P20_proj_Apr2020.csv")
+p20thresholds <- fread("project_data/Poverty thresholds.csv")
 wb_un.regions <- fread("project_data/WB_UN regions.csv")
 names(wb_un.regions)[names(wb_un.regions) == "Povcal_Region"] <- "region"
 
@@ -65,11 +65,13 @@ povcal.tot.out <- function(country="all",year="all",PL=1.9,display="c"){
 }
 
 #pov.lines <- c(seq(0.01, 25, 0.01), seq(26, 1000, 1))
-pov.lines <- c(1.9, 3.2, 5.5)
+pov.lines <- melt(p20thresholds, id.vars = "year")
+pov.lines <- pov.lines[complete.cases(pov.lines)]
+names(pov.lines)[names(pov.lines) == "value"] <- "PovertyLines"
 
 povlist <- list()
-for(i in 1:length(pov.lines)){
-  povlist[[i]] <- as.data.table(povcal.tot.out(PL=pov.lines[i]))
+for(i in 1:nrow(pov.lines)){
+  povlist[[i]] <- as.data.table(povcal.tot.out(year=pov.lines$year[i], PL=pov.lines$PovertyLines[i]))
 }
 pov <- rbindlist(povlist)
 
@@ -116,8 +118,8 @@ WEO[, (year.cols) := PPP/.SD, .SDcols=(year.cols)]
 #proj.years <- c(2015:2021)
 proj.years <- seq(min(WEO$RequestYear)+1, max(as.numeric(names(WEO)), na.rm=T))
 
-year.lines <- expand.grid(ProjYears=proj.years, PovertyLines=pov.lines)
-#year.lines <- rbind(year.lines, setNames(p20thresholds, c("ProjYears", "PovertyLines")))
+year.lines <- pov.lines[year %in% proj.years]
+names(year.lines)[names(year.lines) == "year"] <- "ProjYears"
 
 WEO.split <- split(WEO, seq(1:4))
 
@@ -150,6 +152,7 @@ modelled <- fread("project_data/modelled_countries.csv")
 projpov <- projpov[!(paste0(CountryName, ProjYear) %in% paste0(pov$CountryName, pov$ProjYear))]
 
 projpov <- rbind(projpov, pov, modelled)
+projpov$PovertyLine <- round(projpov$PovertyLine, 4)
 
 if(!("WUP_urban.xls" %in% list.files("project_data") & "WUP_rural.xls" %in% list.files("project_data"))){
   download.file("https://population.un.org/wup/Download/Files/WUP2018-F19-Urban_Population_Annual.xls", "project_data/WUP_urban.xls", mode="wb")
@@ -264,3 +267,12 @@ povcalyears <- c(1981, 1984, 1987, 1990, 1993, 1996, 1999, 2002, 2005, 2008, 201
 projpov.melt <- projpov.melt[ProjYear %in% povcalyears]
 
 fwrite(projpov.melt,"output/globalproj_long_Apr20.csv")
+
+projpov.melt$title <- "p20"
+projpov.melt[PovertyLine > 10]$title <- "p80"
+projpov.melt[PovertyLine == 1.9]$title <- "EPL"
+projpov.melt[PovertyLine == 3.2]$title <- "LPL"
+projpov.melt[PovertyLine == 5.5]$title <- "UPL"
+
+p20.p80 <- dcast(projpov.melt[variable == "HeadCount"], CountryCode + DisplayName + region + Level + ProjYear ~ title, value.var="value")
+fwrite(p20.p80, "output/p20-p80 data.csv")

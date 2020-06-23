@@ -10,9 +10,27 @@ names(wb_un.regions)[names(wb_un.regions) == "Povcal_Region"] <- "region"
 wb_un.regions[ISO3 == "KSV"]$ISO3 <- "XKX"
 wb_un.regions[ISO3 == "WBG"]$ISO3 <- "PSE"
 
-ppps <- as.data.table(WDI(indicator = c("PA.NUS.PRVT.PP", "FP.CPI.TOTL"), extra=T))
+i <- 0
+while(i < 10){
+  try({
+    rm(ppps)
+    ppps <- as.data.table(WDI(indicator = c("PA.NUS.PRVT.PP", "FP.CPI.TOTL"), extra=T))
+  }, silent=T)
+  if(exists("ppps")){
+    if(all(c("PA.NUS.PRVT.PP", "FP.CPI.TOTL") %in% names(ppps))){
+      fwrite(ppps, "project_data/ppps.csv")
+      break
+    }
+  }
+  i <- i + 1
+  print(paste0("Error. Retrying... ",i,"/10"))
+}
 ppps <- ppps[, FP.CPI.TOTL := FP.CPI.TOTL/FP.CPI.TOTL[year==2011], by=.(iso3c)][year == 2017]
 ppps <- ppps[, .(PPP2011.PPP2017 = PA.NUS.PRVT.PP/FP.CPI.TOTL), by=.(iso3c)]
+
+#Manual PPP fixes
+ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011.PPP2017*1000
+ppps[iso3c == "MRT"]$PPP2011.PPP2017 <- ppps[iso3c == "MRT"]$PPP2011.PPP2017*10
 
 ################
 #HHFCEG v GPDG
@@ -69,7 +87,7 @@ povcal.tot.out <- function(country="all",year="all",PL=1.9,display="c"){
 }
 
 #pov.lines <- c(seq(0.01, 25, 0.01), seq(26, 1000, 1))
-pov.lines <- c(1.9, 3.2, 5.5)
+pov.lines <- c(2.192206, 3.65253, 6.161693)
 
 povlist <- list()
 for(i in 1:length(pov.lines)){
@@ -79,7 +97,7 @@ pov <- rbindlist(povlist)
 
 pov <- pov[!is.na(HeadCount)]
 
-pov.rec <- pov[pov[PovertyLine == 1.9, .I[which.max(RequestYear)], by=.(CountryCode, CoverageType)]$V1]
+pov.rec <- pov[pov[PovertyLine == unique(pov$PovertyLine)[1], .I[which.max(RequestYear)], by=.(CountryCode, CoverageType)]$V1]
 
 countries <- pov.rec[, c("CountryCode", "CoverageType", "RequestYear", "PPP", "Mean")]
 
@@ -290,7 +308,28 @@ projpov.melt <- projpov.melt[ProjYear %in% povcalyears]
 fwrite(projpov.melt,"output/globalproj_long_Apr20_2017PPP.csv")
 
 ppp2011projpov.melt <- fread("output/globalproj_long_Apr20.csv")
+
+projpov.melt$line <- as.character(NA)
+projpov.melt[PovertyLine == 2.192206]$line <- "EPL"
+projpov.melt[PovertyLine == 3.652530]$line <- "LPL"
+projpov.melt[PovertyLine == 6.161693]$line <- "UPL"
+ppp2011projpov.melt$line <- as.character(NA)
+ppp2011projpov.melt[PovertyLine == 1.9]$line <- "EPL"
+ppp2011projpov.melt[PovertyLine == 3.2]$line <- "LPL"
+ppp2011projpov.melt[PovertyLine == 5.5]$line <- "UPL"
+
 ppp2011projpov.melt$ProjYear <- as.character(ppp2011projpov.melt$ProjYear)
 names(ppp2011projpov.melt)[names(ppp2011projpov.melt) == "value"] <- "old.value"
+names(ppp2011projpov.melt)[names(ppp2011projpov.melt) == "PovertyLine"] <- "old.PovertyLine"
 compare <-  merge(ppp2011projpov.melt, projpov.melt, all.x=T)
+
+compare <- compare[complete.cases(compare)]
+
 compare$diff <- compare$value-compare$old.value
+
+compare$ProjYear <- as.numeric(levels(compare$ProjYear)[compare$ProjYear])
+
+comparehc <- compare[ProjYear >= 2018]
+comparehc <- comparehc[variable == "HeadCount"]
+
+fwrite(comparehc, "output/PPP compares.csv")

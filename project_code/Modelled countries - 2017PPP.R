@@ -3,6 +3,24 @@ lapply(required.packages, require, character.only=T)
 
 setwd("G:/My Drive/Work/GitHub/poverty_predictions")
 
+i <- 0
+while(i < 10){
+  try({
+    rm(ppps)
+    ppps <- as.data.table(WDI(indicator = c("PA.NUS.PRVT.PP", "FP.CPI.TOTL"), extra=T))
+  }, silent=T)
+  if(exists("ppps")){
+    if(all(c("PA.NUS.PRVT.PP", "FP.CPI.TOTL") %in% names(ppps))){
+      fwrite(ppps, "project_data/ppps.csv")
+      break
+    }
+  }
+  i <- i + 1
+  print(paste0("Error. Retrying... ",i,"/10"))
+}
+ppps <- ppps[, FP.CPI.TOTL := FP.CPI.TOTL/FP.CPI.TOTL[year==2011], by=.(iso3c)][year == 2017]
+ppps <- ppps[, c("iso3c", "PA.NUS.PRVT.PP", "FP.CPI.TOTL")]
+
 ###FUNCTIONS
 
 #Remap survey types
@@ -136,6 +154,7 @@ khm <- data.table(A= c(0.683555591,0.580351138),
 )
 
 countries <- rbind(afg, eri, lby, gnq, som, nru)
+merge(countries, ppps, by.x="ISO", by.y="iso3c")
 
 #GDP per capita growth
 WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2020/01/weodata/WEOApr2020all.xls", na.strings="n/a")
