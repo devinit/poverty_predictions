@@ -9,13 +9,33 @@ projections <- function(PLs=c(1.9), Year="all"){
   wb_un.regions[ISO3 == "KSV"]$ISO3 <- "XKX"
   wb_un.regions[ISO3 == "WBG"]$ISO3 <- "PSE"
   
+  WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2020/01/weodata/WEOApr2020all.xls", na.strings="n/a")
+  WEO.inflation <- WEOraw[`WEO Subject Code` == "PCPIPCH"]
+  WEO.inflation <- melt(WEO.inflation[, c("ISO", as.character(1980:2020))], id.vars = "ISO")
+  WEO.inflation <- WEO.inflation[, .(year = as.numeric(as.character(variable)), WEO.cpi = as.numeric(value)), by=ISO]
+  
   ppps <- fread("project_data/ppps.csv")
-  ppps <- ppps[, FP.CPI.TOTL := FP.CPI.TOTL/FP.CPI.TOTL[year==2011], by=.(iso3c)][year == 2017]
-  ppps <- ppps[, .(PPP2011.PPP2017 = PA.NUS.PRVT.PP/FP.CPI.TOTL), by=.(iso3c)]
+  ppps[iso2c == "KP"]$iso3c <- "PRK"
+  ppps[iso2c == "MK"]$iso3c <- "MKD"
+  
+  ppps <- ppps[iso3c != ""]
+  
+  ppps <- merge(ppps, WEO.inflation, by.x=c("iso3c", "year"), by.y=c("ISO", "year"), all.x=T)
+  ppps[, WEO.cpi.ind := (cumprod(1+(ifelse(is.na(WEO.cpi), 0, WEO.cpi))/100)), by=iso3c]
+  
+  ppps[, WEO.cpi.ind := ifelse(is.na(WEO.cpi), as.numeric(NA), WEO.cpi.ind/WEO.cpi.ind[year == 2010]*100), by=.(iso3c)]
+  
+  ppps[, FP.CPI.TOTL := ifelse(is.na(FP.CPI.TOTL), WEO.cpi.ind, FP.CPI.TOTL)]
+  
+  ppps <- ppps[, `:=` (FP.CPI.TOTL = FP.CPI.TOTL/FP.CPI.TOTL[year==2011], PPP2011 = PA.NUS.PRVT.PP[year == 2011]), by=.(iso3c)][year == 2017]
+  ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/FP.CPI.TOTL, by=.(iso3c)]
   
   #Manual PPP fixes
-  ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011.PPP2017*1000
-  ppps[iso3c == "MRT"]$PPP2011.PPP2017 <- ppps[iso3c == "MRT"]$PPP2011.PPP2017*10
+  ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017*1000
+  ppps[iso3c == "MRT"]$LCU2011.PPP2017 <- ppps[iso3c == "MRT"]$LCU2011.PPP2017*10
+  
+  ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011*1000
+  ppps[iso3c == "MRT"]$PPP2011 <- ppps[iso3c == "MRT"]$PPP2011*10
   
   ################
   #HHFCEG v GPDG
@@ -121,7 +141,7 @@ projections <- function(PLs=c(1.9), Year="all"){
   
   WEO <- merge(WEO, ppps, by.x="ISO", by.y="iso3c", all.x=T)
   
-  WEO[, (year.cols) := PPP2011.PPP2017/.SD, .SDcols=(year.cols)]
+  WEO[, (year.cols) := LCU2011.PPP2017/.SD, .SDcols=(year.cols)]
 
   proj.years <- as.character(Year)
   
@@ -151,14 +171,14 @@ projections <- function(PLs=c(1.9), Year="all"){
   keep <- c("CountryCode","CountryName","CoverageType","PovertyLine","HeadCount")
   projpov <- projpov[,c(..keep, "ProjYear")]
   
-  old.pov <- WEO[, c("ISO", "CoverageType", "PPP2011.PPP2017")]
+  old.pov <- WEO[, c("ISO", "CoverageType", "LCU2011.PPP2017")]
   old.pov.split <- split(old.pov, seq(1:4))
   old.pov.list <- list()
   for(i in 1:length(pov.lines)){
     pl <- pov.lines[i]
     year.data <- list()
     for(j in 1:length(old.pov.split)){
-      year.data[[j]] <- povcal.ind.out(RefYears = T, countries = old.pov.split[[j]]$ISO, coverage=old.pov.split[[j]]$CoverageType, PLs = pl, PPPs=old.pov.split[[j]]$PPP2011.PPP2017)
+      year.data[[j]] <- povcal.ind.out(RefYears = T, countries = old.pov.split[[j]]$ISO, coverage=old.pov.split[[j]]$CoverageType, PLs = pl, PPPs=old.pov.split[[j]]$LCU2011.PPP2017)
     }
     old.pov.list[[i]] <- rbindlist(year.data)
   }
@@ -292,26 +312,12 @@ find.threshold <-function(threshold, year = seq(2018,2021), lower = 0.01, upper 
   setNames(p, c("year", pvalue))
 }
 
-i <- 0
-while(i < 10){
-  try({
-    rm(ppps)
-    ppps <- as.data.table(WDI(indicator = c("PA.NUS.PRVT.PP", "FP.CPI.TOTL"), extra=T))
-  }, silent=T)
-  if(exists("ppps")){
-    if(all(c("PA.NUS.PRVT.PP", "FP.CPI.TOTL") %in% names(ppps))){
-      fwrite(ppps, "project_data/ppps.csv")
-      break
-    }
-  }
-  i <- i + 1
-  print(paste0("Error. Retrying... ",i,"/10"))
-}
-
 old.pov <- fread("output/globalproj_long_Apr20.csv")
-old.pov <- old.pov[DisplayName == "World" & PovertyLine == 1.9 & variable == "HeadCount"]
+old.pov <- old.pov[DisplayName == "World" & variable == "HeadCount"]
+
+old.pov <- old.pov[ProjYear == 2018]
 
 out <- list()
 for(i in 1:nrow(old.pov)){
-  out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=1.9, upper=2.5, tol=0.01)
+  out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=1.9, upper=6, tol=0.01)
 }
