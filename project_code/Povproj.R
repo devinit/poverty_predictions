@@ -85,6 +85,8 @@ countries <- rbind(countries[CoverageType %in% c("N", "A")], countries[, .SD[!an
 
 #GDP per capita growth
 WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2020/01/weodata/WEOApr2020all.xls", na.strings="n/a")
+WEOupdate1 <- read_excel("project_data/WEOJun2020update.xlsx", range = "A7:E38", sheet=1, trim_ws = T)
+WEOupdate2 <- read_excel("project_data/WEOJun2020update.xlsx", range = "A8:E38", sheet=2, trim_ws = T)
 WEO <- WEOraw[`WEO Subject Code` %in% c("NGDPRPPPPCPCH", "NGDPRPPPPC")]
 
 year.cols <- as.character(seq(min(countries$RequestYear), max(as.numeric(names(WEO)), na.rm=T)))
@@ -112,6 +114,8 @@ WEO[!(ISO %in% c("CHN", "IND")), (year.cols) := as.data.table(t(apply(.SD, 1, fu
 # WEO[, (year.cols) := as.data.table(t(apply(.SD, 1, function(x, beta0, beta1) (1+(x*beta0+shift(x)*beta1)/100), beta0=`0`, beta1=`1`))), .SDcols=(year.cols), by=ISO]
 # WEO[, (year.cols) := lapply(1:ncol(.SD), function(i) ifelse(names(.SD)[i] <= RequestYear, 1, .SD[[i]])), .SDcols=(year.cols)]
 # WEO[, (year.cols) := as.data.table(t(apply(.SD, 1, function(x) cumprod(x)))), .SDcols=(year.cols), by=ISO]
+
+
 
 WEO[, (year.cols) := PPP/.SD, .SDcols=(year.cols)]
 

@@ -10,6 +10,11 @@ names(wb_un.regions)[names(wb_un.regions) == "Povcal_Region"] <- "region"
 wb_un.regions[ISO3 == "KSV"]$ISO3 <- "XKX"
 wb_un.regions[ISO3 == "WBG"]$ISO3 <- "PSE"
 
+WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2020/01/weodata/WEOApr2020all.xls", na.strings="n/a")
+WEO.inflation <- WEOraw[`WEO Subject Code` == "PCPIPCH"]
+WEO.inflation <- melt(WEO.inflation[, c("ISO", as.character(1980:2020))], id.vars = "ISO")
+WEO.inflation <- WEO.inflation[, .(year = as.numeric(as.character(variable)), WEO.cpi = as.numeric(value)), by=ISO]
+
 i <- 0
 while(i < 10){
   try({
@@ -25,12 +30,28 @@ while(i < 10){
   i <- i + 1
   print(paste0("Error. Retrying... ",i,"/10"))
 }
-ppps <- ppps[, FP.CPI.TOTL := FP.CPI.TOTL/FP.CPI.TOTL[year==2011], by=.(iso3c)][year == 2017]
-ppps <- ppps[, .(PPP2011.PPP2017 = PA.NUS.PRVT.PP/FP.CPI.TOTL), by=.(iso3c)]
+ppps <- fread("project_data/ppps.csv")
+ppps[iso2c == "KP"]$iso3c <- "PRK"
+ppps[iso2c == "MK"]$iso3c <- "MKD"
+
+ppps <- ppps[iso3c != ""]
+
+ppps <- merge(ppps, WEO.inflation, by.x=c("iso3c", "year"), by.y=c("ISO", "year"), all.x=T)
+ppps[, WEO.cpi.ind := (cumprod(1+(ifelse(is.na(WEO.cpi), 0, WEO.cpi))/100)), by=iso3c]
+
+ppps[, WEO.cpi.ind := ifelse(is.na(WEO.cpi), as.numeric(NA), WEO.cpi.ind/WEO.cpi.ind[year == 2010]*100), by=.(iso3c)]
+
+ppps[, FP.CPI.TOTL := ifelse(is.na(FP.CPI.TOTL), WEO.cpi.ind, FP.CPI.TOTL)]
+
+ppps <- ppps[, `:=` (FP.CPI.TOTL = FP.CPI.TOTL/FP.CPI.TOTL[year==2011], PPP2011 = PA.NUS.PRVT.PP[year == 2011]), by=.(iso3c)][year == 2017]
+ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/FP.CPI.TOTL, by=.(iso3c)]
 
 #Manual PPP fixes
-ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011.PPP2017*1000
-ppps[iso3c == "MRT"]$PPP2011.PPP2017 <- ppps[iso3c == "MRT"]$PPP2011.PPP2017*10
+ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017*1000
+ppps[iso3c == "MRT"]$LCU2011.PPP2017 <- ppps[iso3c == "MRT"]$LCU2011.PPP2017*10
+
+ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011*1000
+ppps[iso3c == "MRT"]$PPP2011 <- ppps[iso3c == "MRT"]$PPP2011*10
 
 ################
 #HHFCEG v GPDG
@@ -43,6 +64,14 @@ ppps[iso3c == "MRT"]$PPP2011.PPP2017 <- ppps[iso3c == "MRT"]$PPP2011.PPP2017*10
 # fce.gdp.est[iso2c == "MK"]$iso3c <- "MKD"
 # 
 # fce.gdp.est <- dcast(fce.gdp.est[!is.na(iso3c)], iso3c ~ lag, value.var = "beta")
+
+npls <- fread("project_data/national_poverty_lines_jollife.csv")
+
+npls <- merge(npls, wb_un.regions, by.x="Country", by.y="CountryName")
+npls <- merge(npls, ppps, by.x="ISO3", by.y="iso3c")
+npls$`Poverty line 2017PPP` <- npls$`Poverty line 2011PPP`*npls$PPP2011/npls$LCU2011.PPP2017
+
+npls <- npls[, .(PPP2017 = mean(`Poverty line 2017PPP`, na.rm=T), PPP2011 = mean(`Poverty line 2011PPP`, na.rm=T)), by=Income_Group]
 
 povcal.ind.out <- function(RefYears=T, countries, coverage, years="all", PLs=1.9, PPPs=NULL, display="c"){
   covtypes <- data.table(code=c("R", "U", "N", "A"), num=c(1, 2, 3, 5))
@@ -87,7 +116,7 @@ povcal.tot.out <- function(country="all",year="all",PL=1.9,display="c"){
 }
 
 #pov.lines <- c(seq(0.01, 25, 0.01), seq(26, 1000, 1))
-pov.lines <- c(2.192206, 3.65253, 6.161693)
+pov.lines <- c(2.184306, 3.626807, 6.105359)
 
 povlist <- list()
 for(i in 1:length(pov.lines)){
@@ -137,7 +166,7 @@ WEO[!(ISO %in% c("CHN", "IND")), (year.cols) := as.data.table(t(apply(.SD, 1, fu
 
 WEO <- merge(WEO, ppps, by.x="ISO", by.y="iso3c", all.x=T)
 
-WEO[, (year.cols) := PPP2011.PPP2017/.SD, .SDcols=(year.cols)]
+WEO[, (year.cols) := LCU2011.PPP2017/.SD, .SDcols=(year.cols)]
 
 #proj.years <- c(2015:2021)
 proj.years <- seq(min(WEO$RequestYear)+1, max(as.numeric(names(WEO)), na.rm=T))
@@ -169,14 +198,14 @@ projpov <- projpov[projpov[!is.na(HeadCount), .I[which.max(RequestYear)], by=.(C
 keep <- c("CountryCode","CountryName","CoverageType","PovertyLine","HeadCount")
 projpov <- projpov[,c(..keep, "ProjYear")]
 
-old.pov <- WEO[, c("ISO", "CoverageType", "PPP2011.PPP2017")]
+old.pov <- WEO[, c("ISO", "CoverageType", "LCU2011.PPP2017")]
 old.pov.split <- split(old.pov, seq(1:4))
 old.pov.list <- list()
 for(i in 1:length(pov.lines)){
   pl <- pov.lines[i]
   year.data <- list()
   for(j in 1:length(old.pov.split)){
-    year.data[[j]] <- povcal.ind.out(RefYears = T, countries = old.pov.split[[j]]$ISO, coverage=old.pov.split[[j]]$CoverageType, PLs = pl, PPPs=old.pov.split[[j]]$PPP2011.PPP2017)
+    year.data[[j]] <- povcal.ind.out(RefYears = T, countries = old.pov.split[[j]]$ISO, coverage=old.pov.split[[j]]$CoverageType, PLs = pl, PPPs=old.pov.split[[j]]$LCU2011.PPP2017)
   }
   old.pov.list[[i]] <- rbindlist(year.data)
 }
@@ -310,9 +339,9 @@ fwrite(projpov.melt,"output/globalproj_long_Apr20_2017PPP.csv")
 ppp2011projpov.melt <- fread("output/globalproj_long_Apr20.csv")
 
 projpov.melt$line <- as.character(NA)
-projpov.melt[PovertyLine == 2.192206]$line <- "EPL"
-projpov.melt[PovertyLine == 3.652530]$line <- "LPL"
-projpov.melt[PovertyLine == 6.161693]$line <- "UPL"
+projpov.melt[PovertyLine == pov.lines[1]]$line <- "EPL"
+projpov.melt[PovertyLine == pov.lines[2]]$line <- "LPL"
+projpov.melt[PovertyLine == pov.lines[3]]$line <- "UPL"
 ppp2011projpov.melt$line <- as.character(NA)
 ppp2011projpov.melt[PovertyLine == 1.9]$line <- "EPL"
 ppp2011projpov.melt[PovertyLine == 3.2]$line <- "LPL"
