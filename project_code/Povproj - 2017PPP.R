@@ -47,9 +47,15 @@ ppps <- ppps[, `:=` (cpi = cpi/cpi[year==2011], PPP2011 = PA.NUS.PRVT.PP[year ==
 ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/cpi, by=.(iso3c)]
 
 #Manual PPP fixes
+ppps[iso3c == "BLR"]$LCU2011.PPP2017 <- ppps[iso3c == "BLR"]$LCU2011.PPP2017*10000
+ppps[iso3c == "LTU"]$LCU2011.PPP2017 <- ppps[iso3c == "LTU"]$LCU2011.PPP2017*3.4528
+ppps[iso3c == "LVA"]$LCU2011.PPP2017 <- ppps[iso3c == "LVA"]$LCU2011.PPP2017*0.702804
 ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017*1000
 ppps[iso3c == "MRT"]$LCU2011.PPP2017 <- ppps[iso3c == "MRT"]$LCU2011.PPP2017*10
 
+ppps[iso3c == "BLR"]$PPP2011 <- ppps[iso3c == "BLR"]$PPP2011*10000
+ppps[iso3c == "LTU"]$PPP2011 <- ppps[iso3c == "LTU"]$PPP2011*3.4528
+ppps[iso3c == "LVA"]$PPP2011 <- ppps[iso3c == "LVA"]$PPP2011*0.702804
 ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011*1000
 ppps[iso3c == "MRT"]$PPP2011 <- ppps[iso3c == "MRT"]$PPP2011*10
 
@@ -175,7 +181,9 @@ proj.years <- seq(min(WEO$RequestYear)+1, max(as.numeric(names(WEO)), na.rm=T))
 year.lines <- expand.grid(ProjYears=proj.years, PovertyLines=pov.lines)
 #year.lines <- rbind(year.lines, setNames(p20thresholds, c("ProjYears", "PovertyLines")))
 
-WEO.split <- split(WEO, seq(1:4))
+WEO.complete <- WEO[WEO[, complete.cases(.SD), .SDcols = year.cols]]
+
+WEO.split <- split(WEO.complete, seq(1:4))
 
 projpov.list <- list()
 for(i in 1:nrow(year.lines)){
