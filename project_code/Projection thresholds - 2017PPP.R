@@ -31,9 +31,15 @@ projections <- function(PLs=c(1.9), Year="all"){
   ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/cpi, by=.(iso3c)]
   
   #Manual PPP fixes
+  ppps[iso3c == "BLR"]$LCU2011.PPP2017 <- ppps[iso3c == "BLR"]$LCU2011.PPP2017*10000
+  ppps[iso3c == "LTU"]$LCU2011.PPP2017 <- ppps[iso3c == "LTU"]$LCU2011.PPP2017*3.4528
+  ppps[iso3c == "LVA"]$LCU2011.PPP2017 <- ppps[iso3c == "LVA"]$LCU2011.PPP2017*0.702804
   ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017*1000
   ppps[iso3c == "MRT"]$LCU2011.PPP2017 <- ppps[iso3c == "MRT"]$LCU2011.PPP2017*10
   
+  ppps[iso3c == "BLR"]$PPP2011 <- ppps[iso3c == "BLR"]$PPP2011*10000
+  ppps[iso3c == "LTU"]$PPP2011 <- ppps[iso3c == "LTU"]$PPP2011*3.4528
+  ppps[iso3c == "LVA"]$PPP2011 <- ppps[iso3c == "LVA"]$PPP2011*0.702804
   ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$PPP2011*1000
   ppps[iso3c == "MRT"]$PPP2011 <- ppps[iso3c == "MRT"]$PPP2011*10
   
