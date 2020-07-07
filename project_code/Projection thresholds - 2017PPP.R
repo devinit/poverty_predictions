@@ -25,10 +25,10 @@ projections <- function(PLs=c(1.9), Year="all"){
   
   ppps[, WEO.cpi.ind := ifelse(is.na(WEO.cpi), as.numeric(NA), WEO.cpi.ind/WEO.cpi.ind[year == 2010]*100), by=.(iso3c)]
   
-  ppps[, FP.CPI.TOTL := ifelse(is.na(FP.CPI.TOTL), WEO.cpi.ind, FP.CPI.TOTL)]
+  ppps[, wb.incomplete := any(is.na(FP.CPI.TOTL)), by=iso3c][, `:=` (cpi = ifelse(wb.incomplete, WEO.cpi.ind, FP.CPI.TOTL), wb.incomplete = NULL)]
   
-  ppps <- ppps[, `:=` (FP.CPI.TOTL = FP.CPI.TOTL/FP.CPI.TOTL[year==2011], PPP2011 = PA.NUS.PRVT.PP[year == 2011]), by=.(iso3c)][year == 2017]
-  ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/FP.CPI.TOTL, by=.(iso3c)]
+  ppps <- ppps[, `:=` (cpi = cpi/cpi[year==2011], PPP2011 = PA.NUS.PRVT.PP[year == 2011]), by=.(iso3c)][year == 2017]
+  ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/cpi, by=.(iso3c)]
   
   #Manual PPP fixes
   ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017*1000
@@ -319,5 +319,5 @@ old.pov <- old.pov[ProjYear == 2018]
 
 out <- list()
 for(i in 1:nrow(old.pov)){
-  out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=1.9, upper=6, tol=0.01)
+  out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=old.pov$PovertyLine[i], upper=old.pov$PovertyLine[i]*1.5, tol=0.01)
 }

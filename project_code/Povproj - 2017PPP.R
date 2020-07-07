@@ -34,17 +34,17 @@ ppps <- fread("project_data/ppps.csv")
 ppps[iso2c == "KP"]$iso3c <- "PRK"
 ppps[iso2c == "MK"]$iso3c <- "MKD"
 
-ppps <- ppps[iso3c != ""]
+ppps <- ppps[iso3c != "" & year >= 2010 & year <=2017]
 
 ppps <- merge(ppps, WEO.inflation, by.x=c("iso3c", "year"), by.y=c("ISO", "year"), all.x=T)
 ppps[, WEO.cpi.ind := (cumprod(1+(ifelse(is.na(WEO.cpi), 0, WEO.cpi))/100)), by=iso3c]
 
 ppps[, WEO.cpi.ind := ifelse(is.na(WEO.cpi), as.numeric(NA), WEO.cpi.ind/WEO.cpi.ind[year == 2010]*100), by=.(iso3c)]
 
-ppps[, FP.CPI.TOTL := ifelse(is.na(FP.CPI.TOTL), WEO.cpi.ind, FP.CPI.TOTL)]
+ppps[, wb.incomplete := any(is.na(FP.CPI.TOTL)), by=iso3c][, `:=` (cpi = ifelse(wb.incomplete, WEO.cpi.ind, FP.CPI.TOTL), wb.incomplete = NULL)]
 
-ppps <- ppps[, `:=` (FP.CPI.TOTL = FP.CPI.TOTL/FP.CPI.TOTL[year==2011], PPP2011 = PA.NUS.PRVT.PP[year == 2011]), by=.(iso3c)][year == 2017]
-ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/FP.CPI.TOTL, by=.(iso3c)]
+ppps <- ppps[, `:=` (cpi = cpi/cpi[year==2011], PPP2011 = PA.NUS.PRVT.PP[year == 2011]), by=.(iso3c)][year == 2017]
+ppps[, LCU2011.PPP2017 := PA.NUS.PRVT.PP/cpi, by=.(iso3c)]
 
 #Manual PPP fixes
 ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017 <- ppps[iso3c == "ZMB" | iso3c == "STP"]$LCU2011.PPP2017*1000
@@ -116,7 +116,7 @@ povcal.tot.out <- function(country="all",year="all",PL=1.9,display="c"){
 }
 
 #pov.lines <- c(seq(0.01, 25, 0.01), seq(26, 1000, 1))
-pov.lines <- c(2.184306, 3.626807, 6.105359)
+pov.lines <- c(2.195249, 3.642544, 6.116760, npls[Income_Group != "HIC"]$PPP2017)
 
 povlist <- list()
 for(i in 1:length(pov.lines)){
@@ -339,26 +339,31 @@ fwrite(projpov.melt,"output/globalproj_long_Apr20_2017PPP.csv")
 ppp2011projpov.melt <- fread("output/globalproj_long_Apr20.csv")
 
 projpov.melt$line <- as.character(NA)
-projpov.melt[PovertyLine == pov.lines[1]]$line <- "EPL"
-projpov.melt[PovertyLine == pov.lines[2]]$line <- "LPL"
-projpov.melt[PovertyLine == pov.lines[3]]$line <- "UPL"
+projpov.melt[PovertyLine == pov.lines[1] | PovertyLine == round(npls[Income_Group == "LIC"]$PPP2017,6)]$line <- "EPL"
+projpov.melt[PovertyLine == pov.lines[2] | PovertyLine == round(npls[Income_Group == "LMC"]$PPP2017,6)]$line <- "LPL"
+projpov.melt[PovertyLine == pov.lines[3] | PovertyLine == round(npls[Income_Group == "UMC"]$PPP2017,6)]$line <- "UPL"
 ppp2011projpov.melt$line <- as.character(NA)
 ppp2011projpov.melt[PovertyLine == 1.9]$line <- "EPL"
 ppp2011projpov.melt[PovertyLine == 3.2]$line <- "LPL"
 ppp2011projpov.melt[PovertyLine == 5.5]$line <- "UPL"
 
+projpov.melt1 <- projpov.melt[!(PovertyLine %in% round(npls$PPP2017,6))]
+projpov.melt2 <- projpov.melt[PovertyLine %in% round(npls$PPP2017,6)]
+names(projpov.melt2)[names(projpov.melt2) == "PovertyLine"] <- "PovertyLine_2"
+names(projpov.melt2)[names(projpov.melt2) == "value"] <- "value_2"
+
 ppp2011projpov.melt$ProjYear <- as.character(ppp2011projpov.melt$ProjYear)
 names(ppp2011projpov.melt)[names(ppp2011projpov.melt) == "value"] <- "old.value"
 names(ppp2011projpov.melt)[names(ppp2011projpov.melt) == "PovertyLine"] <- "old.PovertyLine"
-compare <-  merge(ppp2011projpov.melt, projpov.melt, all.x=T)
-
-compare <- compare[complete.cases(compare)]
+compare <-  merge(ppp2011projpov.melt, projpov.melt1)
+compare <-  merge(compare, projpov.melt2)
 
 compare$diff <- compare$value-compare$old.value
+compare$diff2 <- compare$value_2-compare$old.value
 
 compare$ProjYear <- as.numeric(levels(compare$ProjYear)[compare$ProjYear])
 
-comparehc <- compare[ProjYear >= 2018]
+comparehc <- compare[ProjYear == 2018]
 comparehc <- comparehc[variable == "HeadCount"]
 
 fwrite(comparehc, "output/PPP compares.csv")
