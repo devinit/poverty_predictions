@@ -177,7 +177,7 @@ projections <- function(PLs=c(1.9), Year="all"){
   keep <- c("CountryCode","CountryName","CoverageType","PovertyLine","HeadCount")
   projpov <- projpov[,c(..keep, "ProjYear")]
   
-  old.pov <- WEO[, c("ISO", "CoverageType", "LCU2011.PPP2017")]
+  old.pov <- WEO[!is.na(LCU2011.PPP2017), c("ISO", "CoverageType", "LCU2011.PPP2017")]
   old.pov.split <- split(old.pov, seq(1:4))
   old.pov.list <- list()
   for(i in 1:length(pov.lines)){
@@ -327,3 +327,5 @@ out <- list()
 for(i in 1:nrow(old.pov)){
   out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=old.pov$PovertyLine[i], upper=old.pov$PovertyLine[i]*1.5, tol=0.01)
 }
+
+out <- rbindlist(out, fill=T)
