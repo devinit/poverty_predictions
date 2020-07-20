@@ -206,7 +206,7 @@ projpov <- projpov[projpov[!is.na(HeadCount), .I[which.max(RequestYear)], by=.(C
 keep <- c("CountryCode","CountryName","CoverageType","PovertyLine","HeadCount")
 projpov <- projpov[,c(..keep, "ProjYear")]
 
-old.pov <- WEO[, c("ISO", "CoverageType", "LCU2011.PPP2017")]
+old.pov <- WEO[!is.na(LCU2011.PPP2017), c("ISO", "CoverageType", "LCU2011.PPP2017")]
 old.pov.split <- split(old.pov, seq(1:4))
 old.pov.list <- list()
 for(i in 1:length(pov.lines)){

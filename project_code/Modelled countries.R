@@ -64,8 +64,8 @@ afg <- data.table(A= c(0.935463769, 0.5760727),
                   ISO= "AFG",
                   CountryName = "Afghanistan",
                   year= 2016.5,
-                  mean= 21973.19478/365.2424,
-                  ppp=  21.5432,
+                  mean= 21397.13631/365.2424,
+                  ppp= 21.5432,
                   type=c("GQ","Beta")
                   )
 
