@@ -1,4 +1,4 @@
-setwd("G:/My Drive/Work/GitHub/poverty_predictions/")
+setwd("~/git/poverty_predictions/")
 required.packages <- c("WDI","data.table", "readxl")
 lapply(required.packages, require, character.only=T)
 
@@ -8,8 +8,10 @@ projections <- function(PLs=c(1.9), Year="all"){
   
   wb_un.regions[ISO3 == "KSV"]$ISO3 <- "XKX"
   wb_un.regions[ISO3 == "WBG"]$ISO3 <- "PSE"
-  
-  WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2020/01/weodata/WEOApr2020all.xls", na.strings="n/a")
+  if(!file.exists("project_data/WEOOct2019all.xls")){
+    download.file("http://www.imf.org/external/pubs/ft/weo/2019/02/weodata/WEOOct2019all.xls", "project_data/WEOOct2019all.xls")
+  }
+  WEOraw <- fread("project_data/WEOOct2019all.xls", na.strings="n/a")
   WEO.inflation <- WEOraw[`WEO Subject Code` == "PCPIPCH"]
   WEO.inflation <- melt(WEO.inflation[, c("ISO", as.character(1980:2020))], id.vars = "ISO")
   WEO.inflation <- WEO.inflation[, .(year = as.numeric(as.character(variable)), WEO.cpi = as.numeric(value)), by=ISO]
@@ -115,10 +117,10 @@ projections <- function(PLs=c(1.9), Year="all"){
   countries <- rbind(countries[CoverageType %in% c("N", "A")], countries[, .SD[!any(CoverageType %in% c("N", "A"))],by=CountryCode])
   
   #GDP per capita growth
-  WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2020/01/weodata/WEOApr2020all.xls", na.strings="n/a")
+  WEOraw <- fread("project_data/WEOOct2019all.xls", na.strings="n/a")
   WEO <- WEOraw[`WEO Subject Code` %in% c("NGDPRPPPPCPCH", "NGDPRPPPPC")]
   
-  year.cols <- as.character(seq(min(countries$RequestYear), max(as.numeric(names(WEO)), na.rm=T)))
+  year.cols <- as.character(seq(2010, max(as.numeric(names(WEO)), na.rm=T)))
   
   WEO[, (year.cols) := lapply(.SD, function(x) gsub(",", "", x)), .SDcols=(year.cols)]
   
@@ -318,14 +320,24 @@ find.threshold <-function(threshold, year = seq(2018,2021), lower = 0.01, upper 
   setNames(p, c("year", pvalue))
 }
 
-old.pov <- fread("output/globalproj_long_Apr20.csv")
-old.pov <- old.pov[DisplayName == "World" & variable == "HeadCount"]
+# old.pov <- fread("output/globalproj_long_Apr20.csv")
+# old.pov <- old.pov[DisplayName == "World" & variable == "HeadCount"]
+# 
+# old.pov <- old.pov[ProjYear == 2018]
+# 
+# out <- list()
+# for(i in 1:nrow(old.pov)){
+#   out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=old.pov$PovertyLine[i], upper=old.pov$PovertyLine[i]*1.5, tol=0.01)
+# }
+# 
+# out <- rbindlist(out, fill=T)
 
-old.pov <- old.pov[ProjYear == 2018]
 
+years = c(2010:2021)
 out <- list()
-for(i in 1:nrow(old.pov)){
-  out[[i]] <- find.threshold(threshold=round(old.pov$value[i], 4), year=old.pov$ProjYear[i], lower=old.pov$PovertyLine[i], upper=old.pov$PovertyLine[i]*1.5, tol=0.01)
+for(i in 1:length(years)){
+  out[[i]] <- find.threshold(threshold=0.2, year=years[i])
 }
 
 out <- rbindlist(out, fill=T)
+fwrite(out,"/home/alex/git/poverty_predictions/output/P20_proj_Oct2019_2017PPP.csv")

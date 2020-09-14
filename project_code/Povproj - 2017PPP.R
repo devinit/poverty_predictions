@@ -1,9 +1,9 @@
 required.packages <- c("WDI","data.table", "readxl")
 lapply(required.packages, require, character.only=T)
 
-setwd("G:/My Drive/Work/GitHub/poverty_predictions/")
+setwd("~/git/poverty_predictions/")
 
-p20thresholds <- fread("output/P20_proj_Apr2020.csv")
+p20thresholds <- fread("output/P20_proj_Apr2020_2017PPP.csv")
 wb_un.regions <- fread("project_data/WB_UN regions.csv")
 names(wb_un.regions)[names(wb_un.regions) == "Povcal_Region"] <- "region"
 
@@ -179,7 +179,7 @@ proj.years <- seq(min(WEO$RequestYear)+1, max(as.numeric(names(WEO)), na.rm=T))
 #proj.years <- year.cols
 
 year.lines <- expand.grid(ProjYears=proj.years, PovertyLines=pov.lines)
-#year.lines <- rbind(year.lines, setNames(p20thresholds, c("ProjYears", "PovertyLines")))
+year.lines <- rbind(year.lines, setNames(p20thresholds, c("ProjYears", "PovertyLines")))
 
 WEO.complete <- WEO[WEO[, complete.cases(.SD), .SDcols = year.cols]]
 
