@@ -10,7 +10,10 @@ names(wb_un.regions)[names(wb_un.regions) == "Povcal_Region"] <- "region"
 wb_un.regions[ISO3 == "KSV"]$ISO3 <- "XKX"
 wb_un.regions[ISO3 == "WBG"]$ISO3 <- "PSE"
 
-WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2019/02/weodata/WEOOct2019all.xls", na.strings="n/a")
+if(!file.exists("project_data/WEOOct2019all.xls")){
+  download.file("http://www.imf.org/external/pubs/ft/weo/2019/02/weodata/WEOOct2019all.xls", "project_data/WEOOct2019all.xls")
+}
+WEOraw <- fread("project_data/WEOOct2019all.xls", na.strings="n/a")
 WEO.inflation <- WEOraw[`WEO Subject Code` == "PCPIPCH"]
 WEO.inflation <- melt(WEO.inflation[, c("ISO", as.character(1980:2020))], id.vars = "ISO")
 WEO.inflation <- WEO.inflation[, .(year = as.numeric(as.character(variable)), WEO.cpi = as.numeric(value)), by=ISO]
@@ -122,7 +125,7 @@ povcal.tot.out <- function(country="all",year="all",PL=1.9,display="c"){
 }
 
 #pov.lines <- c(seq(0.01, 25, 0.01), seq(26, 1000, 1))
-pov.lines <- c(2.195249, 3.642544, 6.116760, npls[Income_Group != "HIC"]$PPP2017)
+pov.lines <- c(2.195249, unique(p20thresholds$P20))
 
 povlist <- list()
 for(i in 1:length(pov.lines)){
@@ -139,7 +142,7 @@ countries <- pov.rec[, c("CountryCode", "CoverageType", "RequestYear", "PPP", "M
 countries <- rbind(countries[CoverageType %in% c("N", "A")], countries[, .SD[!any(CoverageType %in% c("N", "A"))],by=CountryCode])
 
 #GDP per capita growth
-WEOraw <- fread("http://www.imf.org/external/pubs/ft/weo/2019/02/weodata/WEOOct2019all.xls", na.strings="n/a")
+WEOraw <- fread("project_data/WEOOct2019all.xls", na.strings="n/a")
 WEO <- WEOraw[`WEO Subject Code` %in% c("NGDPRPPPPCPCH", "NGDPRPPPPC")]
 
 year.cols <- as.character(seq(min(countries$RequestYear), max(as.numeric(names(WEO)), na.rm=T)))
