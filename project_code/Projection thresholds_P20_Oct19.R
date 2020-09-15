@@ -123,7 +123,7 @@ for(i in 1:nrow(all_dat)){
     attempt <- attempt + 1
     try({
       p20 = optimise(function(x){return(abs(projection.threshold(cc,year,x)-0.2))}, lower=0.01, upper=100, tol=0.001)$minimum
-    })
+    }, silent=T)
   }
   
   p80 = NA
@@ -133,7 +133,7 @@ for(i in 1:nrow(all_dat)){
     attempt <- attempt + 1
     try({
       p80 = optimise(function(x){return(abs(projection.threshold(cc,year,x)-0.8))}, lower=0.01, upper=100, tol=0.001)$minimum
-    })
+    }, silent=T)
   }
   
   tmp = data.frame(CountryCode=cc,ProjYear=year,p20=p20,p80=p80)
