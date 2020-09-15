@@ -110,17 +110,35 @@ proj_dat = expand.grid(CountryCode=unique(all_dat$CountryCode),RequestYear=c(201
 all_dat = unique(rbind(all_dat,proj_dat))
 pb = txtProgressBar(min=1,max=nrow(all_dat),style=3)
 for(i in 1:nrow(all_dat)){
+  rm(cc, year, p20, p80)
   setTxtProgressBar(pb, i)
   row = all_dat[i,]
   cc = row$CountryCode
   year = row$RequestYear
-  try({
-  p20 = optimise(function(x){return(abs(projection.threshold(cc,year,x)-0.2))}, lower=0.01, upper=100, tol=0.001)$minimum
-  p80 = optimise(function(x){return(abs(projection.threshold(cc,year,x)-0.8))}, lower=0.01, upper=100, tol=0.001)$minimum
+  
+  p20 = NA
+  attempt = 0
+  while( is.na(p20) && attempt <= 10 ) {
+    Sys.sleep(1)
+    attempt <- attempt + 1
+    try({
+      p20 = optimise(function(x){return(abs(projection.threshold(cc,year,x)-0.2))}, lower=0.01, upper=100, tol=0.001)$minimum
+    })
+  }
+  
+  p80 = NA
+  attempt = 0
+  while( is.na(p80) && attempt <= 10 ) {
+    Sys.sleep(1)
+    attempt <- attempt + 1
+    try({
+      p80 = optimise(function(x){return(abs(projection.threshold(cc,year,x)-0.8))}, lower=0.01, upper=100, tol=0.001)$minimum
+    })
+  }
+  
   tmp = data.frame(CountryCode=cc,ProjYear=year,p20=p20,p80=p80)
   data.list[[data.index]] = tmp
   data.index = data.index + 1
-  })
 }
 close(pb)
 income_dat = rbindlist(data.list)
