@@ -136,7 +136,7 @@ for(i in 1:nrow(all_dat)){
     p80 = miss.row$p80
   }
   attempt = 0
-  while( is.na(p80) && attempt <= 10 ) {
+  while( is.na(p80) && attempt <= 20 ) {
     Sys.sleep(1)
     attempt <- attempt + 1
     try({
@@ -153,7 +153,7 @@ income_dat_miss = rbindlist(data.list)
 income_dat = rbind(income_dat, income_dat_miss)
 miss = subset(income_dat, is.na(p20) | is.na(p80))
 message(nrow(miss))
-fwrite(income_dat, "output/p20_p80_incomes_Oct19_3.csv")
+fwrite(income_dat, "output/p20_p80_incomes_Oct19_4.csv")
 save(income_dat,file="output/income_dat_oct19.RData")
 # fwrite(income_dat, "output/p20_p80_incomes_Oct19.csv")
 miss = subset(income_dat, is.na(p20) | is.na(p80))
