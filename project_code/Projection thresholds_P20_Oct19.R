@@ -116,9 +116,14 @@ for(i in 1:nrow(all_dat)){
   cc = row$CountryCode
   year = row$RequestYear
   
+  miss.row = subset(miss,CountryCode==cc & RequestYear==year)
+  
   p20 = NA
+  if(!is.na(miss.row$p20)){
+    p20 = miss.row$p20
+  }
   attempt = 0
-  while( is.na(p20) && attempt <= 10 ) {
+  while( is.na(p20) && attempt <= 20 ) {
     Sys.sleep(1)
     attempt <- attempt + 1
     try({
@@ -127,6 +132,9 @@ for(i in 1:nrow(all_dat)){
   }
   
   p80 = NA
+  if(!is.na(miss.row$p80)){
+    p80 = miss.row$p80
+  }
   attempt = 0
   while( is.na(p80) && attempt <= 10 ) {
     Sys.sleep(1)
@@ -141,5 +149,17 @@ for(i in 1:nrow(all_dat)){
   data.index = data.index + 1
 }
 close(pb)
-income_dat = rbindlist(data.list)
-fwrite(income_dat, "output/p20_p80_incomes_Oct19.csv")
+income_dat_miss = rbindlist(data.list)
+income_dat = rbind(income_dat, income_dat_miss)
+miss = subset(income_dat, is.na(p20) | is.na(p80))
+message(nrow(miss))
+fwrite(income_dat, "output/p20_p80_incomes_Oct19_3.csv")
+save(income_dat,file="output/income_dat_oct19.RData")
+# fwrite(income_dat, "output/p20_p80_incomes_Oct19.csv")
+miss = subset(income_dat, is.na(p20) | is.na(p80))
+all_dat = miss
+setnames(all_dat, "ProjYear", "RequestYear")
+all_dat = unique(all_dat[,c("CountryCode","RequestYear")])
+data.list = list()
+data.index = 1
+income_dat = income_dat[complete.cases(income_dat),]
